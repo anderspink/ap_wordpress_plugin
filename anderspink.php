@@ -19,8 +19,8 @@
  * Version:           1.0.0
  * Author:            Anders Pink
  * Author URI:        https://anderspink.com
- * License:           GPL-2.0+
- * License URI:       http://www.gnu.org/licenses/gpl-2.0.txt
+ * License:           MIT
+ * License URI:       http://opensource.org/licenses/MIT
  * Text Domain:       anderspink
  * Domain Path:       /languages
  */
