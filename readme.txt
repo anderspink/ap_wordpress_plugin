@@ -30,7 +30,7 @@ You can use any combination of keywords, domains, Twitter influencers or RSS fee
 
 Anders Pink delivers the content as a briefing- a collection of articles which is updated every few hours. You can choose to display any number of articles from this briefing automatically.
 
-You can also curate content manually. Simply review the articles Anders Pink brings back each day and save the ones most important to your learners to a saved board. You can then choose to display this curated content. In this way you can really control the content that is displayed.
+You can also curate content manually. Simply review the articles Anders Pink brings back each day and save the ones most important to your visitors to a saved board. You can then choose to display this curated content. In this way you can really control the content that is displayed.
 
 = Pricing = 
 
