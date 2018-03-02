@@ -6,6 +6,7 @@ a.ap-article {
     display: block;
     line-height: normal;
     overflow: hidden;
+    padding-bottom: 9px;
 }
 
 .ap-article-text {
@@ -14,8 +15,14 @@ a.ap-article {
 .ap-margin-right {
     margin-right: 65px;
 }
-
-
+.ap-article-content {
+    font-size: 0.9em;
+    margin-top: 0.4em;
+    line-height: 1.4;
+}
+.ap-article-comment {
+    font-style: italic;
+}
 .ap-article-image-container-top {
     margin-bottom: 5px;
     box-shadow: inset 0 0 1px #AAA;

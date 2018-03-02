@@ -30,24 +30,24 @@ if ( ! defined( 'WPINC' ) ) {
 	die;
 }
 
-const ANDERSPINK_URL = 'https://anderspink.com/api/v1';
+const ANDERSPINK_URL = 'https://anderspink.com/api/v2';
 
 
-// Creating the widget 
+// Creating the widget
 class AndersPink_Widget extends WP_Widget {
 
     function __construct() {
         parent::__construct(
             // Base ID of your widget
-            'anderspink_widget', 
+            'anderspink_widget',
 
             // Widget name will appear in UI
-            __('Anders Pink', 'anderspink_domain'), 
+            __('Anders Pink', 'anderspink_domain'),
 
             // Widget description
             array(
                 'description' => __('Anders Pink widget to display your briefings and boards.', 'anderspink_domain'),
-            ) 
+            )
         );
     }
 
@@ -60,37 +60,43 @@ class AndersPink_Widget extends WP_Widget {
         if (!empty($title)) {
             echo $args['before_title'] . $title . $args['after_title'];
         }
-        
+
         $this->renderWidget($instance);
-        
+
         echo $args['after_widget'];
     }
-    
+
     private function renderWidget($instance) {
-        
+
         $options = get_option('ap_settings');
-        
+
         if (!$options || !isset($options['ap_api_key']) || strlen(trim($options['ap_api_key'])) === 0) {
             echo __('Please set your Anders Pink API key (or use the free key) in the admin settings.', 'anderspink_domain');
             return;
         }
-        
+
+        $filter_imageless = (isset($instance['filter_imageless']) && $instance['filter_imageless']) ? '&filter_imageless' : '';
+
+        $instance['preview_content'] = (isset($instance['preview_content']) && $instance['preview_content']) ? $instance['preview_content'] : false;
+        $instance['show_comments'] = (isset($instance['show_comments']) && $instance['show_comments']) ? $instance['show_comments'] : false;
+        $time = (isset($instance['briefing_time_imit']) && $instance['briefing_time_imit']) ? $instance['briefing_time_imit'] : 'auto';
+
         $url = null;
         $expiry = null;
         if ($instance['source'] === 'briefing') {
-            $url = ANDERSPINK_URL . "/briefings/{$instance['briefing']}?limit={$instance['limit']}";
-            $expiry = 60;
+            $url = ANDERSPINK_URL . "/briefings/{$instance['briefing']}?limit={$instance['limit']}{$filter_imageless}&time={$time}";
+            $expiry = 10;
         } else if ($instance['source'] === 'board') {
-            $url = ANDERSPINK_URL . "/boards/{$instance['board']}?limit={$instance['limit']}";
-            $expiry = 15;
+            $url = ANDERSPINK_URL . "/boards/{$instance['board']}?limit={$instance['limit']}{$filter_imageless}";
+            $expiry = 10;
         }
-        
+
         // Do we have a cached version of this?
         $key =  'ap_' . md5($url . $options['ap_api_key']);
-        
+
         $cachedData = get_transient($key);
         $data = null;
-        
+
         if ($cachedData) {
             $data = json_decode($cachedData, true);
         } else {
@@ -101,7 +107,7 @@ class AndersPink_Widget extends WP_Widget {
                     'Content-Type' => 'application/json'
                 )
             ));
-            
+
             if (!is_array($response)) {
                 echo __('Sorry, there was an error connecting to the Anders Pink server', 'anderspink_domain');
                 return;
@@ -115,17 +121,17 @@ class AndersPink_Widget extends WP_Widget {
                 echo __('Error:', 'anderspink_domain') . ' ' . $data['message'];
                 return;
             }
-            
+
             // Save in the cache..
             set_transient($key, json_encode($data), $expiry);
         }
-        
+
         // Get the html for the individual articles
         $articleHtml = array();
         foreach (array_slice($data['data']['articles'], 0, $instance['limit']) as $article) {
-            $articleHtml[] = $this->renderArticle($article, $instance['image']);
+            $articleHtml[] = $this->renderArticle($article, $instance['image'], $instance['preview_content'], $instance['show_comments']);
         }
-        
+
         if ($instance['column'] === '1') {
             echo implode("\n", $articleHtml);
         } else if ($instance['column'] === '2') {
@@ -136,9 +142,8 @@ class AndersPink_Widget extends WP_Widget {
                 '</div>';
         }
     }
-    
-    private function renderArticle($article, $imagePosition='side') {
 
+    private function renderArticle($article, $imagePosition='side', $preview_content=false, $show_comments=false) {
         $side = $imagePosition === 'side';
 
         $extra = array();
@@ -162,17 +167,31 @@ class AndersPink_Widget extends WP_Widget {
         $cutoff = 75;
         $title = strlen(trim($article['title'])) > $cutoff ? substr($article['title'],0,$cutoff) . "..." : $article['title'];
 
+        $featured_comment = null;
+        if ($show_comments && count($article['comments']) > 0) {
+            foreach ($article['comments'] as $comment) {
+                if (isset($comment['pinned']) && $comment['pinned']) {
+                    $featured_comment = $comment;
+                }
+            }
+            if (!$featured_comment) {
+                $featured_comment = $article['comments'][count($article['comments']) - 1];
+            }
+        }
+
         return "
             <a class='ap-article' href='{$article['url']}' title='" . htmlspecialchars($article['title'], ENT_QUOTES) . "' target='_blank'>
                 {$image}
                 <div class='" . (($side && $article['image']) ? 'ap-margin-right' : '') . "'>
                     <div>". htmlspecialchars($title) . "</div>
                     <div class='ap-article-text-extra'>". implode(' - ', $extra) ."</div>
+                    ". ($preview_content ? ("<div class='ap-article-content'>". $article['content'] ."</div>") : "") ."
+                    ". ($featured_comment ? ("<div class='ap-article-content'>Our comment: <span class='ap-article-comment'>\"". $featured_comment['text'] ."\"</span></div>") : "") ."
                 </div>
             </a>
         ";
     }
-    
+
     private function time2str($ts) {
         if(!ctype_digit($ts)) {
             $ts = strtotime($ts);
@@ -194,21 +213,21 @@ class AndersPink_Widget extends WP_Widget {
             if($day_diff < 31) { return ceil($day_diff / 7) . 'w'; }
         }
         return date('F Y', $ts);
-    } 
-    		
-    // Widget Backend 
+    }
+
+    // Widget Backend
     public function form( $instance ) {
-        
-        
+
+
         $options = get_option('ap_settings');
-        
+
         if (!$options || !isset($options['ap_api_key']) || strlen(trim($options['ap_api_key'])) === 0) {
             echo '<p>' . __('Please set your Anders Pink API key (or use the free key) in the admin settings.', 'anderspink_domain') . '</p>';
             return;
         }
-        
+
         // Do a curl call to get the briefings/boards...
-        
+
         $response1 = wp_remote_get(ANDERSPINK_URL . '/briefings', array(
             'timeout' => 3,
             'headers' => array(
@@ -227,12 +246,12 @@ class AndersPink_Widget extends WP_Widget {
                 )
             ));
         }
-        
+
         if (!is_array($response1) || !is_array($response2)) {
             echo '<p>' . __('Sorry, there was an error connecting to the AP server', 'anderspink_domain') . '</p>';
             return;
         }
-        
+
         $data1 = json_decode($response1['body'], true);
         $data2 = json_decode($response2['body'], true);
         if (!$data1 || !$data2) {
@@ -247,8 +266,8 @@ class AndersPink_Widget extends WP_Widget {
             echo '<p>' . __('Error:', 'anderspink_domain') . ' ' . $data2['message'] . '</p>';
             return;
         }
-        
-        
+
+
         $briefings = [];
         $boards = [];
         foreach ($data1['data']['owned_briefings'] as $briefing) {
@@ -260,10 +279,16 @@ class AndersPink_Widget extends WP_Widget {
         foreach ($data2['data']['owned_boards'] as $board) {
             $boards[$board['id']] = $board['name'];
         }
-        
-        //var_dump($data);
-        
-        
+
+        $time_limits = [
+            'auto' => 'Auto (recommended)',
+            '24-hours' => '24 Hours',
+            '3-days' => '3 Days',
+            '1-week' => '1 Week',
+            '1-month' => '1 Month',
+            '3-months' => '3 Months',
+				];
+
         $title = isset($instance['title']) ? $instance['title'] :  __('Anders Pink', 'anderspink_domain');
         $source = isset($instance['source']) ? $instance['source'] : 'briefing';
         $briefing = isset($instance['briefing']) ? $instance['briefing'] : null;
@@ -271,25 +296,29 @@ class AndersPink_Widget extends WP_Widget {
         $image = isset($instance['image']) ? $instance['image'] : 'side';
         $column = isset($instance['column']) ? $instance['column'] : '1';
         $limit = isset($instance['limit']) ? $instance['limit'] : '5';
-        
+        $show_comments = isset($instance['show_comments']) ? $instance['show_comments'] : false;
+        $filter_imageless = isset($instance['filter_imageless']) ? $instance['filter_imageless'] : false;
+        $preview_content = isset($instance['preview_content']) ? $instance['preview_content'] : false;
+        $briefing_time_imit = isset($instance['briefing_time_imit']) ? $instance['briefing_time_imit'] : 'auto';
+
         // Widget admin form
         ?>
             <p>
-                <label for="<?php echo $this->get_field_id('title'); ?>"><?php _e('Title:'); ?></label> 
-                <input class="widefat" 
+                <label for="<?php echo $this->get_field_id('title'); ?>"><?php _e('Title:'); ?></label>
+                <input class="widefat"
                        id="<?= $this->get_field_id('title'); ?>"
                        name="<?= $this->get_field_name('title'); ?>"
                        type="text"
-                       value="<?php echo esc_attr( $title ); ?>" 
+                       value="<?php echo esc_attr( $title ); ?>"
                 />
             </p>
             <p>
                 <input type="radio" name="<?= $this->get_field_name('source'); ?>" value="briefing" <?= $source === 'briefing' ? 'checked' : '' ?> /> Show a briefing &nbsp;
-                <input type="radio" name="<?= $this->get_field_name('source'); ?>" value="board" <?= $source === 'board' ? 'checked' : '' ?> /> Show a board
+                <input type="radio" name="<?= $this->get_field_name('source'); ?>" value="board" <?= $source === 'board' ? 'checked' : '' ?> /> Show a saved folder
             </p>
             <p id="<?= $this->get_field_id('briefing_section'); ?>">
-                <label for="<?php echo $this->get_field_id('briefing'); ?>"><?php _e('Briefings:'); ?></label> 
-                <select class="widefat" 
+                <label for="<?php echo $this->get_field_id('briefing'); ?>"><?php _e('Briefings:'); ?></label>
+                <select class="widefat"
                        id="<?= $this->get_field_id('briefing'); ?>"
                        name="<?= $this->get_field_name('briefing'); ?>"
                 >
@@ -297,10 +326,20 @@ class AndersPink_Widget extends WP_Widget {
                         <option value="<?= $id ?>" <?= $id == $briefing ? 'selected' : '' ?> ><?= $name ?></option>
                     <?php endforeach; ?>
                 </select>
+                <br /><br />
+                <label for="<?php echo $this->get_field_id('briefing_time_imit'); ?>"><?php _e('Briefing time period:'); ?></label>
+                <select class="widefat"
+                       id="<?= $this->get_field_id('briefing_time_imit'); ?>"
+                       name="<?= $this->get_field_name('briefing_time_imit'); ?>"
+                >
+                    <?php foreach ($time_limits as $id => $name): ?>
+                        <option value="<?= $id ?>" <?= $id == $briefing_time_imit ? 'selected' : '' ?> ><?= $name ?></option>
+                    <?php endforeach; ?>
+                </select>
             </p>
             <p id="<?= $this->get_field_id('board_section'); ?>"
-                <label for="<?php echo $this->get_field_id('board'); ?>"><?php _e('Saved boards:'); ?></label> 
-                <select class="widefat" 
+                <label for="<?php echo $this->get_field_id('board'); ?>"><?php _e('Saved folders:'); ?></label>
+                <select class="widefat"
                        id="<?= $this->get_field_id('board'); ?>"
                        name="<?= $this->get_field_name('board'); ?>"
                 >
@@ -313,7 +352,7 @@ class AndersPink_Widget extends WP_Widget {
                 <label for="<?php echo $this->get_field_id('image'); ?>"><?php _e('Article image position:'); ?></label><br />
                 <input type="radio" name="<?= $this->get_field_name('image'); ?>" value="side" <?= $image === 'side' ? 'checked' : '' ?> /> On the right (small) &nbsp;
                 <input type="radio" name="<?= $this->get_field_name('image'); ?>" value="top" <?= $image === 'top' ? 'checked' : '' ?> /> Above (large)
-            
+
             </p>
             <p>
                 <label for="<?php echo $this->get_field_id('column'); ?>"><?php _e('Number of columns:'); ?></label><br />
@@ -321,22 +360,31 @@ class AndersPink_Widget extends WP_Widget {
                 <input type="radio" name="<?= $this->get_field_name('column'); ?>" value="2" <?= $column === '2' ? 'checked' : '' ?> /> Two columns
             </p>
             <p>
-                <label for="<?php echo $this->get_field_id('limit'); ?>"><?php _e('Number of articles to show (min 1, max 30):'); ?></label> 
-                <input class="widefat" 
+                <label for="<?php echo $this->get_field_id('limit'); ?>"><?php _e('Number of articles to show (min 1, max 30):'); ?></label>
+                <input class="widefat"
                        id="<?= $this->get_field_id('limit'); ?>"
                        name="<?= $this->get_field_name('limit'); ?>"
                        type="text"
-                       value="<?= $limit ?>" 
+                       value="<?= $limit ?>"
                 />
+            </p>
+            <p>
+                <input type="checkbox" name="<?= $this->get_field_name('filter_imageless'); ?>" value="1" <?= $filter_imageless ? 'checked' : '' ?> /> <?php _e('Only show articles that have an image'); ?>
+            </p>
+            <p>
+                <input type="checkbox" name="<?= $this->get_field_name('preview_content'); ?>" value="1" <?= $preview_content ? 'checked' : '' ?> /> <?php _e('Show preview of article content'); ?>
+            </p>
+            <p>
+                <input type="checkbox" name="<?= $this->get_field_name('show_comments'); ?>" value="1" <?= $show_comments ? 'checked' : '' ?> /> <?php _e('Show article pinned comments'); ?>
             </p>
             <script type="text/javascript">
                 (function($) {
                     $(function() {
-                        
+
                         var sourceInputName = "<?= $this->get_field_name('source'); ?>";
                         var briefingSectionId = "<?= $this->get_field_id('briefing_section'); ?>";
                         var boardSectionId = "<?= $this->get_field_id('board_section'); ?>";
-                        
+
                         function handleSourceVisibility(source) {
                             if (source === "briefing") {
                                 $("#" + briefingSectionId).show();
@@ -346,19 +394,19 @@ class AndersPink_Widget extends WP_Widget {
                                 $("#" + boardSectionId).show();
                             }
                         }
-                        
+
                         handleSourceVisibility($("[name='" + sourceInputName + "']:checked").val());
-                        
+
                         $("[name='" + sourceInputName + "']").change(function(e) {
                             handleSourceVisibility(this.value);
                         });
-                        
+
                     });
                 })(jQuery);
             </script>
-        <?php 
+        <?php
     }
-    	
+
     // Updating widget replacing old instances with new
     public function update( $new_instance, $old_instance ) {
         $instance = array();
@@ -369,6 +417,10 @@ class AndersPink_Widget extends WP_Widget {
         $instance['image'] = ( ! empty( $new_instance['image'] ) ) ? strip_tags( $new_instance['image'] ) : 'side';
         $instance['column'] = ( ! empty( $new_instance['column'] ) ) ? strip_tags( $new_instance['column'] ) : '1';
         $instance['limit'] = ( ! empty( $new_instance['limit'] ) ) ? strip_tags( $new_instance['limit'] ) : '5';
+        $instance['show_comments'] = ( ! empty( $new_instance['show_comments'] ) ) ? ($new_instance['show_comments'] ? true : false) : false;
+        $instance['filter_imageless'] = ( ! empty( $new_instance['filter_imageless'] ) ) ? ($new_instance['filter_imageless'] ? true : false) : false;
+        $instance['preview_content'] = ( ! empty( $new_instance['preview_content'] ) ) ? ($new_instance['preview_content'] ? true : false) : false;
+				$instance['briefing_time_imit'] = ( ! empty( $new_instance['briefing_time_imit'] ) ) ? strip_tags( $new_instance['briefing_time_imit'] ) : 'auto';
         return $instance;
     }
 }
@@ -391,40 +443,40 @@ add_action('widgets_init', 'wpb_load_widget');
 add_action( 'admin_menu', 'ap_add_admin_menu' );
 add_action( 'admin_init', 'ap_settings_init' );
 
-function ap_add_admin_menu() { 
+function ap_add_admin_menu() {
 	add_options_page('Anderspink', 'Anders Pink', 'manage_options', 'anderspink', 'ap_options_page');
 }
 
-function ap_settings_init() { 
+function ap_settings_init() {
 	register_setting('pluginPage', 'ap_settings');
 	add_settings_section(
-		'ap_pluginPage_section', 
-		null, 
-		'ap_settings_section_callback', 
+		'ap_pluginPage_section',
+		null,
+		'ap_settings_section_callback',
 		'pluginPage'
 	);
-	add_settings_field( 
-		'ap_api_key', 
-		__('Anders Pink API key', 'anderspink'), 
-		'ap_api_key_render', 
-		'pluginPage', 
-		'ap_pluginPage_section' 
+	add_settings_field(
+		'ap_api_key',
+		__('Anders Pink API key', 'anderspink'),
+		'ap_api_key_render',
+		'pluginPage',
+		'ap_pluginPage_section'
 	);
 }
 
 
-function ap_api_key_render() { 
+function ap_api_key_render() {
 	$options = get_option('ap_settings');
 	?>
 	<input type='text' size='44' name='ap_settings[ap_api_key]' value='<?= isset($options['ap_api_key']) ? $options['ap_api_key'] : ''; ?>'>
 	<?php
 }
 
-function ap_settings_section_callback() { 
+function ap_settings_section_callback() {
 }
 
 
-function ap_options_page() { 
+function ap_options_page() {
 	?>
     	<form action='options.php' method='post'>
     		<h2>Anders Pink</h2>
