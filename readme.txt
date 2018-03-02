@@ -32,19 +32,9 @@ Anders Pink delivers the content as a briefing- a collection of articles which i
 
 You can also curate content manually. Simply review the articles Anders Pink brings back each day and save the ones most important to your visitors to a saved board. You can then choose to display this curated content. In this way you can really control the content that is displayed.
 
-= Pricing = 
+= Pricing =
 
-- AP Free: Comes with 8 pre-set briefings*. Completely free.
-- AP Trial: 3 custom briefings. 3 boards. Free for 14 days.
-- AP Intro: 3 custom briefings. 3 boards. £19 per month (£9 for education/charity). £195 annually.
-- AP Pro: 20 custom briefings. 10 boards. £99 per month (£49 for education/charity). £999 annually.
-- AP Enterprise: contact us for pricing.
-
-*AP Free gives you 8 free pre-set briefings you can display in your WordPress site. Topics include: Latest news, Business news, Technology news, Copywriting tips, Team building tips, Employee engagement, Elearning, and Leadership.
-
-To create your own custom curated briefings on any topic you want, start a Free AP Trial.
-
-To arrange a free trial key for 14 days or to buy now, contact us.
+We offer an included key to test out the plugin. You can contact us for a free trial, or to get pricing for your use-case.
 
 == Installation ==
 
@@ -69,6 +59,9 @@ Please contact us via https://anderspink.com/contact
 
 = 1.0 =
 * Initial version
+
+= 2.0 =
+* Move to v2 of the API, with new features such as content preview and pulling through comments
 
 
 == Upgrade Notice ==
